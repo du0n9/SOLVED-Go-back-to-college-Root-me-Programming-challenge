@@ -1,9 +1,4 @@
-#define WIN32_LEAN_AND_MEAN
-
-#include <winsock2.h>
 #include <ws2tcpip.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <iostream>
 #include <string>
 #include <math.h>
@@ -18,101 +13,91 @@ using namespace std;
 		Author: Du0n9
 		I used Dev-C++5.11 and if you use Dev-C++ too,you need to link libws2_32.a (WinSock2) and libadvapi32.a (Instruction:https://www.tinkerforge.com/en/doc/Software/API_Bindings_C.html)
 		or just open Project3.dev with Dev-C++
-		You can test it by running Project3.exe
 		Thank Z3r0n3 for suggestion
 		https://01day.wordpress.com/tag/root-me-org-solutions/
-		
 */
 
 
 
-int __cdecl main() 
+int main() 
 {   
 
-    int iResult;
-    
-    //Initialize WSA
+	
+	int result;
+	
+	// Initialize Winsock
+	
     WSADATA wsaData;
-    WSAStartup(MAKEWORD(2,2), &wsaData);
-    cout<<"Initialize WSA OK"<<endl;
-	
-	
-	//Create Socket for Client
-	struct addrinfo *result = NULL,
-                    *ptr = NULL,
-                    hints;
-    ZeroMemory( &hints, sizeof(hints) );
+	result = WSAStartup(MAKEWORD(2,2), &wsaData);
+	if (result != 0) {
+		cout<<"Initialize Winsock Fail: "<<result<<endl;
+		return 1;
+	}
+	else cout<<"Initialize Winsock OK"<<endl;
+
+    // Resolve the server address and port
+    addrinfo hints,							  	  //A pointer to an addrinfo structure that provides hints about the type of socket the caller supports.
+			 *res;                                //A linked list of one or more addrinfo structures that contains response information about the host.
+    ZeroMemory( &hints, sizeof(hints) );		  //The ai_addrlen, ai_canonname, ai_addr, and ai_next members of the addrinfo structure pointed to by the pHints parameter must be zero or NULL. 
+												  //Otherwise the GetAddrInfoEx function will fail with WSANO_RECOVERY.
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
+    result = getaddrinfo( "irc.root-me.org", "6667" , &hints, &res);
+	if ( result != 0) {
+		cout<<"getaddrinfo failed: "<<result<<endl;
+		return 1;
+	}
+	else cout<<"getaddrinfo OK"<<endl;
 
-    // Resolve the server address and port
-    getaddrinfo("irc.root-me.org", "6667", &hints, &result);   		//change "127.0.0.1" to host (node) name or a numeric host address :
-    cout<<"Resolve the server address and port OK"<<endl;
-    
 
-    // Attempt to connect to an address until one succeeds
-    cout<<"Attempt to connect to  address"<<endl;
-    SOCKET ConnectSocket = INVALID_SOCKET;
-    for(ptr=result; ptr != NULL ;ptr=ptr->ai_next) {
-
-        // Create a SOCKET for connecting to server
-        ConnectSocket = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
-        if (ConnectSocket == INVALID_SOCKET) {
-        	cout<<"socket failed with error: "<<WSAGetLastError()<<endl;
-            WSACleanup();
-            return 1;
-        }
-        else{
-        	cout<<"Connected to irc.root-me.org Port:6667"<<endl;
-        }
-
-        // Connect to server.
-        iResult = connect( ConnectSocket, ptr->ai_addr, (int)ptr->ai_addrlen);
-        if (iResult == SOCKET_ERROR) {
-            closesocket(ConnectSocket);
-            ConnectSocket = INVALID_SOCKET;
-            continue;
-        }
-        break;
-    }
-
-    freeaddrinfo(result);
-
-    if (ConnectSocket == INVALID_SOCKET) {
-        printf("Unable to connect to server!\n");
-        WSACleanup();
-        return 1;
-    }
-	cout<<endl;
+	// Create connecting Socket
+	SOCKET connectSOCK = socket( res->ai_family , res->ai_socktype , res->ai_protocol );
+	if ( connectSOCK == INVALID_SOCKET ) {
+		cout<<"Create connect sock failed: "<<WSAGetLastError()<<endl;
+		WSACleanup();
+		return 1;
+	}
+	else cout<<"Create connect sock OK"<<endl;
 	
+	// Connect 
+	result = connect( connectSOCK , res->ai_addr , (int) res->ai_addrlen);
+	if ( result != 0) {
+		cout<<"connect failed: "<<WSAGetLastError()<<endl;
+		closesocket(connectSOCK );
+		WSACleanup();
+		return 1;
+	}
+	else cout<<"connect OK"<<endl;
+	
+    freeaddrinfo(res);
     // Do the registration stuff and join challenge’s room
     
 	const char *user="USER 01110129 ignore ignore :ChallengeBot\n";		//send USER
-    iResult = send( ConnectSocket, user, strlen(user), 0 );
-    if (iResult == SOCKET_ERROR) {
+    result = send( connectSOCK, user, strlen(user), 0 );
+    if (result == SOCKET_ERROR) {
         printf("send failed with error: %d\n", WSAGetLastError());
-        closesocket(ConnectSocket);
+        closesocket(connectSOCK);
         WSACleanup();
         return 1;
     }
     cout<<"USER command sended"<<endl;
     
     const char *nick="NICK du0n9\n";												//send NICK
-    send( ConnectSocket, nick, strlen(nick), 0 );
+    send( connectSOCK, nick, strlen(nick), 0 );
 	cout<<"NICK command sended"<<endl;
 	cout<<endl;
 	
 	int registered =0;
 	do {
 		char rec1[DEFAULT_BUFLEN]="\0";
-        iResult=recv(ConnectSocket, rec1, DEFAULT_BUFLEN, 0);
-        if ( iResult > 0 ){
+        result=recv(connectSOCK, rec1, DEFAULT_BUFLEN, 0);
+        if ( result > 0 ){
         	cout<<rec1<<endl;
-        	cout<<"Bytes received: "<<iResult<<endl;
+        	cout<<"Bytes received: "<<result<<endl;
         	cout<<endl;
         }
-        else if ( iResult == 0 )
+        else if ( result == 0 )
             printf("Connection closed\n");
         else
             printf("recv failed with error: %d\n", WSAGetLastError());
@@ -124,7 +109,7 @@ int __cdecl main()
     		cout<<endl;
         }
     }
-    while((!registered)&&(iResult>0));
+    while((!registered)&&(result>0));
 
 	if (!registered) {
 		cout<<"Register FAIL"<<endl;
@@ -135,9 +120,9 @@ int __cdecl main()
 	
 	
 	const char *join="JOIN #Root-Me_Challenge\n";										//send JOIN
-	send( ConnectSocket, join, strlen(join), 0 );
+	send( connectSOCK, join, strlen(join), 0 );
 	char room_info[DEFAULT_BUFLEN]="\0";												//receive room_info									
-	recv(ConnectSocket,room_info, DEFAULT_BUFLEN, 0);
+	recv(connectSOCK,room_info, DEFAULT_BUFLEN, 0);
 	cout<<room_info<<endl;
 	cout<<endl;
 	cout<<endl;									
@@ -151,9 +136,9 @@ int __cdecl main()
 	
 	//Receive flag
 	const char *candy="PRIVMSG Candy :!ep1\r\n";			//PM Candy
-	send( ConnectSocket, candy, strlen(candy), 0 );
+	send( connectSOCK, candy, strlen(candy), 0 );
 	char candy_rep[DEFAULT_BUFLEN]="\0";
-	recv(ConnectSocket,candy_rep, DEFAULT_BUFLEN, 0);		//receive candy reply
+	recv(connectSOCK,candy_rep, DEFAULT_BUFLEN, 0);		//receive candy reply
 	cout<<candy_rep<<endl;
 
 	int num1,num2;											// 2 numbers to calculate
@@ -174,12 +159,12 @@ int __cdecl main()
 	char message[100]="PRIVMSG Candy :!ep1 -rep ";
 	strcat(message,answer);
 	strcat(message,"\n");
-	send( ConnectSocket,message, strlen(message), 0 );
+	send( connectSOCK,message, strlen(message), 0 );
 	char flag[DEFAULT_BUFLEN]="\0";
-	recv(ConnectSocket,flag, DEFAULT_BUFLEN, 0);
+	recv(connectSOCK,flag, DEFAULT_BUFLEN, 0);
 	cout<<"LET VALIDATE THIS CHALLENGE <3<3<3"<<endl;
 	cout<<flag<<endl;	
-	send(ConnectSocket,"QUIT :By3 By3!\n",strlen("QUIT :By3 By3!"),0);		//Quit IRC
+	send(connectSOCK,"QUIT :By3 By3!\n",strlen("QUIT :By3 By3!"),0);		//Quit IRC
 
 
 
@@ -193,8 +178,8 @@ int __cdecl main()
 
 
     // cleanup
-    shutdown(ConnectSocket, SD_SEND);
-    closesocket(ConnectSocket);
+    shutdown(connectSOCK, SD_SEND);
+    closesocket(connectSOCK);
     WSACleanup();
     cout<<"PRESS ENTER TO EXIT"<<endl;
 	getchar();
